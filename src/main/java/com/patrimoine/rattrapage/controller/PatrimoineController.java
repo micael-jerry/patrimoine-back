@@ -1,6 +1,7 @@
 package com.patrimoine.rattrapage.controller;
 
 import com.patrimoine.rattrapage.controller.dto.PatrimoineDto;
+import com.patrimoine.rattrapage.controller.exeption.NotFoundException;
 import com.patrimoine.rattrapage.controller.mapper.PatrimoineMapper;
 import com.patrimoine.rattrapage.dao.Patrimoine;
 import com.patrimoine.rattrapage.service.PatrimoineService;
@@ -22,7 +23,11 @@ public class PatrimoineController {
 
     @GetMapping("/patrimoines/{id}")
     public Patrimoine findPatrimoineById(@PathVariable String id) throws IOException {
-        return this.patrimoineService.getPatrimoine(id);
+        Patrimoine patrimoine = this.patrimoineService.getPatrimoine(id);
+        if (patrimoine == null) {
+            throw new NotFoundException("Patrimoine with id " + id + " not found");
+        }
+        return patrimoine;
     }
 
     @PutMapping("/patrimoines/{id}")
