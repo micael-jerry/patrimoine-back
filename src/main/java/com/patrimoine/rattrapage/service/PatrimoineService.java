@@ -3,8 +3,6 @@ package com.patrimoine.rattrapage.service;
 import com.patrimoine.rattrapage.dao.Patrimoine;
 import org.springframework.stereotype.Service;
 
-import javax.json.*;
-import javax.json.stream.JsonParsingException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,37 +10,35 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class PatrimoineService {
-    private final String filePath = "patrimoines.json";
+
+    private final String filePath = "patrimoines.data";
 
     public Patrimoine getPatrimoine(String id) throws IOException {
         List<Patrimoine> patrimoines = this.loadPatrimoines();
 
-        for (Patrimoine p : patrimoines) {
-            if (p.getId().equals(id)) {
-                return p;
-            }
-        }
-        return null;
+        return patrimoines.stream()
+                .filter(p -> p.getId().equals(id))
+                .findFirst()
+                .orElse(null);
     }
 
     public Patrimoine saveOrUpdatePatrimoine(Patrimoine patrimoine) throws IOException {
         List<Patrimoine> patrimoines = this.loadPatrimoines();
 
-        for (int i = 0; i < patrimoines.size(); i++) {
-            if (patrimoines.get(i).getId().equals(patrimoine.getId())) {
-                patrimoines.set(i, patrimoine);
-                this.savePatrimoines(patrimoines);
-                return patrimoine;
-            }
-        }
+        patrimoines = patrimoines.stream()
+                .filter(p -> !p.getId().equals(patrimoine.getId()))
+                .collect(Collectors.toList());
+
         patrimoines.add(patrimoine);
         this.savePatrimoines(patrimoines);
+
         return patrimoine;
     }
 
@@ -54,36 +50,40 @@ public class PatrimoineService {
             return patrimoines;
         }
 
-        try (InputStream is = Files.newInputStream(Paths.get(filePath));
-             JsonReader reader = Json.createReader(is)) {
-
-            JsonArray jsonArray = reader.readArray();
-            for (JsonValue value : jsonArray) {
-                JsonObject obj = value.asJsonObject();
-                Patrimoine patrimoine = new Patrimoine();
-                patrimoine.setPossesseur(obj.getString("possesseur"));
-                patrimoine.setDerniereModification(LocalDateTime.parse(obj.getString("derniereModification")));
-                patrimoines.add(patrimoine);
+        try (InputStream is = Files.newInputStream(Paths.get(filePath))) {
+            String jsonContent = new String(is.readAllBytes());
+            if (jsonContent.isBlank()) {
+                return patrimoines;
             }
-        } catch (JsonParsingException e) {
-            throw new IOException("Erreur lors de la lecture du fichier JSON.", e);
+
+            String[] records = jsonContent.split("\\r?\\n"); // Each patrimoine is stored in a new line
+            for (String record : records) {
+                try {
+                    String[] parts = record.split(";");
+                    Patrimoine patrimoine = new Patrimoine();
+                    patrimoine.setId(parts[0]);
+                    patrimoine.setPossesseur(parts[1]);
+                    patrimoine.setDerniereModification(LocalDateTime.parse(parts[2]));
+                    patrimoines.add(patrimoine);
+                } catch (DateTimeParseException | ArrayIndexOutOfBoundsException e) {
+                    throw new IOException("Erreur lors de la lecture du fichier JSON.", e);
+                }
+            }
         }
+
         return patrimoines;
     }
 
     private void savePatrimoines(List<Patrimoine> patrimoines) throws IOException {
-        try (OutputStream os = Files.newOutputStream(Paths.get(filePath));
-             JsonWriter writer = Json.createWriter(os)) {
-
-            JsonArrayBuilder arrayBuilder = Json.createArrayBuilder();
+        try (OutputStream os = Files.newOutputStream(Paths.get(filePath))) {
+            StringBuilder sb = new StringBuilder();
             for (Patrimoine patrimoine : patrimoines) {
-                JsonObjectBuilder objBuilder = Json.createObjectBuilder()
-                        .add("possesseur", patrimoine.getPossesseur())
-                        .add("derniereModification", patrimoine.getDerniereModification().toString());
-                arrayBuilder.add(objBuilder);
+                sb.append(patrimoine.getId()).append(";")
+                        .append(patrimoine.getPossesseur()).append(";")
+                        .append(patrimoine.getDerniereModification().toString())
+                        .append(System.lineSeparator());
             }
-
-            writer.writeArray(arrayBuilder.build());
+            os.write(sb.toString().getBytes());
         }
     }
 }
