@@ -16,11 +16,6 @@ public class PatrimoineController {
     private PatrimoineService patrimoineService;
     private PatrimoineMapper patrimoineMapper;
 
-    @GetMapping("/patrimoines")
-    public String p() {
-        return "patrimoines";
-    }
-
     @GetMapping("/patrimoines/{id}")
     public Patrimoine findPatrimoineById(@PathVariable String id) throws IOException {
         Patrimoine patrimoine = this.patrimoineService.getPatrimoine(id);
